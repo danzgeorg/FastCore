@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# PyCharm
+.idea/
+
+# Warm-up project data. Never commit user data or uploads.
+users.json
+warmup/03_webapp/uploads/
+warmup/03_webapp/*.xlsx
