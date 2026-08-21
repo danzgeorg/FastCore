@@ -1,6 +1,5 @@
 import csv
 import json
-import os
 
 rows_read = 0
 rows_kept = []
