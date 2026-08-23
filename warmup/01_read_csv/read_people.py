@@ -11,7 +11,7 @@ reject_reasons_rows = []
 reject_reasons = {}
 duplicates_found = 0
 
-with open("warmup-data/people.csv", newline='') as csvfile:
+with open("../../warmup-data/people.csv", newline='') as csvfile:
     reader = csv.DictReader(csvfile)
 
     for row in reader:
@@ -77,5 +77,5 @@ summary = {
     "people_per_city": dict(sorted(people_per_city.items()))
 }
 
-with open("summary.json", "w") as output:
+with open("../../warmup/01_read_csv/summary.json", "w") as output:
     json.dump(summary, output, indent=2)
