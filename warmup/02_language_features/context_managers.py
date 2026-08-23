@@ -1,3 +1,7 @@
+"""
+Context manager warmup: a Timer implemented 2 ways (class with __enter__ and __exit__ and a function with
+@contextlib.contextmanager), both printing the elapsed time even when the wrapped block raises an exception."""
+
 import contextlib
 import time
 

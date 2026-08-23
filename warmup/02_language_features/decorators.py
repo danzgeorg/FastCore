@@ -1,3 +1,7 @@
+"""Decorator warmup: @timer (prints runtime) and @retry(times=3), retries on exceptions, raising after all attempts
+fail), stacked as @retry above @timer on a function that fails 2 times before succeeding - used to show that decorator
+order changes what @timer measures."""
+
 import functools
 import time
 
