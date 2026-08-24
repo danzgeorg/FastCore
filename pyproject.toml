@@ -1,0 +1,39 @@
+# Install with: pip install --group dev
+# The ruff pin must match the version used in .github/workflows/lint.yml.
+[dependency-groups]
+dev = [
+    "ruff==0.16.4",
+    "mypy==2.3.1",
+]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # Conflicting pydocstyle pairs: keep D211 (no blank line before class
+    # docstring) and D212 (summary on the first line of the docstring).
+    "D203",
+    "D213",
+    # Formatter-incompatible rules, per the official Ruff recommendation.
+    "COM812",
+    "ISC001",
+    # The repository has no copyright header policy.
+    "CPY001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Warmup exercises are standalone teaching scripts, not library code:
+# printing results, sleeping to make timings visible, module-level execution
+# and demonstrating globals are the point of the exercises.
+"warmup/**" = [
+    "T201",    # print
+    "INP001",  # implicit namespace package
+    "PLW0603", # global statement
+]

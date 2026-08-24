@@ -1,0 +1,47 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Version is pinned so CI matches the locally installed ruff; bump both together.
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.16.4"
+          args: check --output-format=github .
+
+      - name: Check formatting
+        run: ruff format --check .
+
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install dev dependencies
+        run: pip install --group dev
+
+      # mypy exits with an error when a tree contains no Python files,
+      # which is the state of main until the first code lands.
+      - name: Type check
+        run: |
+          if [ -n "$(git ls-files '*.py')" ]; then
+            mypy .
+          else
+            echo "No Python files to type check."
+          fi
