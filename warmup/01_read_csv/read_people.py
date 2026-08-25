@@ -1,18 +1,27 @@
+"""Read people.csv, validate rows, and write summary.json."""
+
 import csv
 import json
+from pathlib import Path
 
 rows_read = 0
 rows_kept = []
 seen_emails = set()
-people_per_city = {}
+
+people_per_city: dict[str,int] = {}
 name_email_pairs = []
+
 reject_reasons_rows = []
-reject_reasons = {}
+reject_reasons: dict[str,int] = {}
 duplicates_found = 0
+
 people_csv = "../../warmup-data/people.csv"
 summary_json = "../../warmup/01_read_csv/summary.json"
 
-with open(people_csv, newline='') as csvfile:
+MIN_AGE = 18
+MAX_AGE = 120
+
+with Path(people_csv).open() as csvfile:
     reader = csv.DictReader(csvfile)
 
     for row in reader:
@@ -45,7 +54,7 @@ with open(people_csv, newline='') as csvfile:
                 reject_reasons["age not a number"] = 1
             continue
         else:
-            if not 18 <= age <= 120:
+            if not MIN_AGE <= age <= MAX_AGE:
                 reject_reasons_rows.append((row, "age out of range"))
                 if "age out of range" in reject_reasons:
                     reject_reasons["age out of range"] += 1
@@ -81,5 +90,5 @@ summary = {
     "people_per_city": dict(sorted(people_per_city.items()))
 }
 
-with open(summary_json, "w") as output:
+with Path(summary_json).open("w") as output:
     json.dump(summary, output, indent=2)
