@@ -81,11 +81,7 @@ summary = {
     "rows_kept": kept,
     "rows_rejected": rows_rejected,
     "duplicates_found": duplicates,
-    "reject_reasons": {
-        "empty name": reject_reasons["empty name"],
-        "age not a number": reject_reasons["age not a number"],
-        "age out of range": reject_reasons["age out of range"],
-    },
+    "reject_reasons": {**reject_reasons},
     "cities_count": len(people_per_city),
     "people_per_city": dict(sorted(people_per_city.items())),
 }
