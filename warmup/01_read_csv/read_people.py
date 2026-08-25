@@ -8,11 +8,11 @@ rows_read = 0
 rows_kept = []
 seen_emails = set()
 
-people_per_city: dict[str,int] = {}
+people_per_city: dict[str, int] = {}
 name_email_pairs = []
 
 reject_reasons_rows = []
-reject_reasons: dict[str,int] = {}
+reject_reasons: dict[str, int] = {}
 duplicates_found = 0
 
 people_csv = "../../warmup-data/people.csv"
@@ -87,7 +87,7 @@ summary = {
         "age out of range": reject_reasons["age out of range"],
     },
     "cities_count": len(people_per_city),
-    "people_per_city": dict(sorted(people_per_city.items()))
+    "people_per_city": dict(sorted(people_per_city.items())),
 }
 
 with Path(summary_json).open("w") as output:
