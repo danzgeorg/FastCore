@@ -1,15 +1,18 @@
 import csv
+from typing import Generator
 
 path = "../../warmup-data/people.csv"
 
-def read_csv(filename):
+
+def read_csv(filename: str) -> Generator[list[str], None, None]:
     """Task 1: yields each row of the csv file"""
     with open(filename) as f:
         reader = csv.reader(f)
         for row in reader:
             yield row
 
-#Task 1:
+
+# Task 1:
 print(f"Task 1: {list(read_csv(path))}\n")
 
 

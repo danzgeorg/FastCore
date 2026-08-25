@@ -40,7 +40,7 @@ def timer() -> Generator[None, Any, None]:
     Yields:
         None: there is nothing after the yield, so this cannot be used as "with timer() as t": unlike the class,
         there is no object to bind.
-         """
+    """
     try:
         start = time.time()
         yield
