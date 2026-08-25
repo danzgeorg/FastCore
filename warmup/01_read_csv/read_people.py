@@ -4,14 +4,15 @@ import json
 rows_read = 0
 rows_kept = []
 seen_emails = set()
-rows_rejected = 0
 people_per_city = {}
 name_email_pairs = []
 reject_reasons_rows = []
 reject_reasons = {}
 duplicates_found = 0
+people_csv = "../../warmup-data/people.csv"
+summary_json = "../../warmup/01_read_csv/summary.json"
 
-with open("../../warmup-data/people.csv", newline='') as csvfile:
+with open(people_csv, newline='') as csvfile:
     reader = csv.DictReader(csvfile)
 
     for row in reader:
@@ -22,52 +23,55 @@ with open("../../warmup-data/people.csv", newline='') as csvfile:
         city = row["city"].strip()
         age = row["age"].strip()
 
-        # if email not in seen_emails:
+        if email in seen_emails:
+            continue
         seen_emails.add(email)
 
         if not name:
-            rows_rejected += 1
             reject_reasons_rows.append((row, "empty name"))
             if "empty name" in reject_reasons:
                 reject_reasons["empty name"] += 1
             else:
                 reject_reasons["empty name"] = 1
+            continue
 
-        if not age.isdigit():
-            rows_rejected += 1
+        try:
+            age = int(age)
+        except ValueError:
             reject_reasons_rows.append((row, "age not a number"))
             if "age not a number" in reject_reasons:
                 reject_reasons["age not a number"] += 1
             else:
                 reject_reasons["age not a number"] = 1
             continue
-
-        elif not 18 <= int(age) <= 120:
-            rows_rejected += 1
-            reject_reasons_rows.append((row, "age out of range"))
-            if "age out of range" in reject_reasons:
-                reject_reasons["age out of range"] += 1
-                continue
-            reject_reasons["age out of range"] = 1
-
-        if not city:
-            city = "unknown"
-            row["city"] = city
-
-        name_email_pairs.append((name, email))
-        if city in people_per_city:
-            people_per_city[city] += 1
-
         else:
-            people_per_city[city] = 1
+            if not 18 <= age <= 120:
+                reject_reasons_rows.append((row, "age out of range"))
+                if "age out of range" in reject_reasons:
+                    reject_reasons["age out of range"] += 1
+                else:
+                    reject_reasons["age out of range"] = 1
+                continue
 
-        rows_kept.append(row)
+            if not city:
+                city = "unknown"
+                row["city"] = city
+            name_email_pairs.append((name, email))
+            if city in people_per_city:
+                people_per_city[city] += 1
+            else:
+                people_per_city[city] = 1
+            rows_kept.append(row)
+
+duplicates = rows_read - len(seen_emails)
+rows_rejected = sum(reject_reasons.values())
+kept = rows_read - duplicates - rows_rejected
 
 summary = {
     "rows_read": rows_read,
-    "rows_kept": len(rows_kept),
+    "rows_kept": kept,
     "rows_rejected": rows_rejected,
-    "duplicates_found": rows_read - len(seen_emails),
+    "duplicates_found": duplicates,
     "reject_reasons": {
         "empty name": reject_reasons["empty name"],
         "age not a number": reject_reasons["age not a number"],
@@ -77,5 +81,5 @@ summary = {
     "people_per_city": dict(sorted(people_per_city.items()))
 }
 
-with open("../../warmup/01_read_csv/summary.json", "w") as output:
+with open(summary_json, "w") as output:
     json.dump(summary, output, indent=2)
