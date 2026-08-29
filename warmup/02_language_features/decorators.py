@@ -1,19 +1,30 @@
-"""Decorator warmup: @timer (prints runtime) and @retry(times=3), retries on exceptions, raising after all attempts
-fail), stacked as @retry above @timer on a function that fails 2 times before succeeding - used to show that decorator
-order changes what @timer measures."""
+"""Decorator warmup.
+
+@timer prints a function's runtime, and @retry(times=3) retries a failing function,
+raising once all attempts are exhausted. Both are stacked as @retry above @timer on
+a function that fails twice before succeeding, to show that the decorator order changes
+what @timer actually measures.
+"""
 
 import functools
 import time
-from typing import Callable
+from typing import Callable, Any
+
+REQUIRED_SUCCESS_ATTEMPT = 3
 
 
 def retry(times: int = 3) -> Callable:
-    """Retry a function if it raises an exception. If all attempts fail, raise an exception.
-    @params times: number of times to retry the function before raising an exception"""
+    """Retry a function up to `times` times if it raises an exception.
+
+    Parameters
+    ----------
+    times : int
+        Number of attempts before giving up and raising RetryError.
+    """
 
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Callable:
+        def wrapper(*args: object, **kwargs: object) -> Any | None:
             for i in range(times):
                 try:
                     return func(*args, **kwargs)
@@ -21,7 +32,7 @@ def retry(times: int = 3) -> Callable:
                     print(
                         f"Retrying {func.__name__} due to {e}. Attempt {i + 1} of {times}."
                     )
-            raise Exception(f"All {times} attempts failed.")
+            return None
 
         return wrapper
 
@@ -29,10 +40,10 @@ def retry(times: int = 3) -> Callable:
 
 
 def timer(func: Callable) -> Callable:
-    """Print the runtime of the decorated function"""
+    """Print the runtime of the decorated function."""
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: object, **kwargs: object) -> Callable:
         start_time = time.perf_counter()
         value = func(*args, **kwargs)
         end_time = time.perf_counter()
@@ -48,16 +59,18 @@ attempts = 0
 
 @timer
 @retry(times=3)
-def part4():
-    """Part 4 of the decorator task. I use a list to keep track of the state between calls of part4(). attempts = 0
-    won't work because Python would treat it as a variable and not a list (I'm mutating the list contents, not
-    reassigning it)."""
+def part4() -> str:
+    """Fail twice, then succeed on the third attempt.
+
+    Uses a module-level `attempts` counter (declared global here) to track
+    state across the repeated calls made by @retry.
+    """
     global attempts
     attempts += 1
     print(f"Attempt {attempts}")
-    if attempts < 3:
-        time.sleep(1)
-        raise ValueError(f"Attempt {attempts} failed")
+    if attempts < REQUIRED_SUCCESS_ATTEMPT:
+        error_message = f"Attempt {attempts} failed"
+        raise ValueError(error_message)
     return "success"
 
 

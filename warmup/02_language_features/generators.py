@@ -1,20 +1,21 @@
+"""Generator warmup: reading a CSV lazily with yield, generator exhaustion, and list vs generator expressions."""
+
 import csv
-from typing import Generator
+from collections.abc import Generator
+from pathlib import Path
 
 path = "../../warmup-data/people.csv"
 
 
-def read_csv(filename: str) -> Generator[list[str], None, None]:
-    """Task 1: yields each row of the csv file"""
-    with open(filename) as f:
+def read_csv(filename: str) -> Generator[list[str]]:
+    """Yield each row of the csv file."""
+    with Path(filename).open() as f:
         reader = csv.reader(f)
-        for row in reader:
-            yield row
+        yield from reader
 
 
 # Task 1:
 print(f"Task 1: {list(read_csv(path))}\n")
-
 
 # Task 2: call the generator without looping
 gen = read_csv(path)
@@ -29,14 +30,15 @@ print("\nSecond loop: ")
 for row in gen:
     print(f"{row}")
 
-"""Second loop outputs nothing because generator is exhausted after the first loop, but no error is raised"""
+# Second loop outputs nothing because the generator is exhausted after the
+# first loop, but no error is raised.
 
 # Task 4: Compare list comprehension and generator
 print("\nTask 4:")
-with open(path) as f:
-    line_list = [line for line in f]
+with Path(path).open() as f:
+    line_list = [line for line in f]  # noqa: C416 - task compares comprehension vs generator syntax
     print(f"List comprehension: {line_list}")
 
-with open(path) as f:
+with Path(path).open() as f:
     line_gen = (line for line in f)
     print(f"Generator: {line_gen}")
