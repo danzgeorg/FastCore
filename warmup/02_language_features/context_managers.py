@@ -8,10 +8,12 @@ block raises an exception.
 
 import contextlib
 import time
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
+from typing import Self
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from types import TracebackType
 
 
 class Timer:
@@ -38,7 +40,7 @@ class Timer:
         self,
         exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
-        exc_tb: object | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """Print the elapsed time when the context is exited.
 
@@ -71,7 +73,7 @@ def timer() -> Generator[None]:
         print(f"Elapsed time: {elapsed:.2f} seconds")
 
 
-class Example(Exception):
+class ExampleError(Exception):
     """Raised to prove that clean-up still runs when the with block fails."""
 
     def __init__(self) -> None:
@@ -80,4 +82,4 @@ class Example(Exception):
 
 with timer():
     time.sleep(1)
-    raise Example()
+    raise ExampleError

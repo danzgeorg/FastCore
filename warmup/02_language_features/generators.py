@@ -1,8 +1,11 @@
 """Generator warmup: reading a CSV lazily with yield, generator exhaustion, and list vs generator expressions."""
 
 import csv
-from collections.abc import Generator
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 path = "../../warmup-data/people.csv"
 
@@ -36,7 +39,7 @@ for row in gen:
 # Task 4: Compare list comprehension and generator
 print("\nTask 4:")
 with Path(path).open() as f:
-    line_list = [line for line in f]  # noqa: C416 - task compares comprehension vs generator syntax
+    line_list = [line for line in f]
     print(f"List comprehension: {line_list}")
 
 with Path(path).open() as f:

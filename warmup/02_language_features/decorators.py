@@ -8,9 +8,14 @@ what @timer actually measures.
 
 import functools
 import time
-from collections.abc import Callable
+from typing import TYPE_CHECKING
+from typing import ParamSpec
 from typing import TypeVar
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+Params = ParamSpec("Params")
 Return = TypeVar("Return")
 REQUIRED_SUCCESS_ATTEMPT = 3
 
@@ -23,7 +28,7 @@ class RetryError(Exception):
         super().__init__(msg)
 
 
-def retry(times: int = 3) -> Callable[[Callable[..., Return]], Callable[..., Return]]:
+def retry(times: int = 3) -> Callable[[Callable[Params, Return]], Callable[Params, Return]]:
     """Retry a function up to `times` times if it raises an exception.
 
     Parameters
@@ -32,16 +37,14 @@ def retry(times: int = 3) -> Callable[[Callable[..., Return]], Callable[..., Ret
         Number of attempts before giving up and raising RetryError.
     """
 
-    def decorator(func: Callable[..., Return]) -> Callable[..., Return]:
+    def decorator(func: Callable[Params, Return]) -> Callable[Params, Return]:
         @functools.wraps(func)
-        def wrapper(*args: object, **kwargs: object) -> Return:
+        def wrapper(*args: Params.args, **kwargs: Params.kwargs) -> Return:
             for i in range(times):
                 try:
                     return func(*args, **kwargs)
-                except Exception as e:
-                    print(
-                        f"Retrying {func.__name__} due to {e}. Attempt {i + 1} of {times}."
-                    )
+                except ValueError as e:
+                    print(f"Retrying {func.__name__} due to {e}. Attempt {i + 1} of {times}.")
             raise RetryError(times)
 
         return wrapper
@@ -49,11 +52,11 @@ def retry(times: int = 3) -> Callable[[Callable[..., Return]], Callable[..., Ret
     return decorator
 
 
-def timer(func: Callable[..., Return]) -> Callable[..., Return]:
+def timer[**Params, Return](func: Callable[Params, Return]) -> Callable[Params, Return]:
     """Print the runtime of the decorated function."""
 
     @functools.wraps(func)
-    def wrapper(*args: object, **kwargs: object) -> Return:
+    def wrapper(*args: Params.args, **kwargs: Params.kwargs) -> Return:
         start_time = time.perf_counter()
         value = func(*args, **kwargs)
         end_time = time.perf_counter()
