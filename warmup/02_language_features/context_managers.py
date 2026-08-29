@@ -8,7 +8,10 @@ block raises an exception.
 
 import contextlib
 import time
-from collections.abc import Generator
+from typing import TYPE_CHECKING, Self
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 class Timer:
@@ -20,7 +23,7 @@ class Timer:
         The time when the context was entered.
     """
 
-    def __enter__(self) -> "Timer":
+    def __enter__(self) -> Self:
         """Record the start time when the context is entered.
 
         Returns
@@ -32,7 +35,10 @@ class Timer:
         return self
 
     def __exit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
     ) -> None:
         """Print the elapsed time when the context is exited.
 

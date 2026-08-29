@@ -8,11 +8,19 @@ what @timer actually measures.
 
 import functools
 import time
-from typing import Callable, Any, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 Return = TypeVar("Return")
-
 REQUIRED_SUCCESS_ATTEMPT = 3
+
+
+class RetryError(Exception):
+    """Raised when a function fails to complete after multiple attempts."""
+
+    def __init__(self, times: int) -> None:
+        msg = f"Failed {times} times."
+        super().__init__(msg)
 
 
 def retry(times: int = 3) -> Callable[[Callable[..., Return]], Callable[..., Return]]:
@@ -34,7 +42,7 @@ def retry(times: int = 3) -> Callable[[Callable[..., Return]], Callable[..., Ret
                     print(
                         f"Retrying {func.__name__} due to {e}. Attempt {i + 1} of {times}."
                     )
-            raise Exception(f"Failed {times} times.")
+            raise RetryError(times)
 
         return wrapper
 
@@ -45,7 +53,7 @@ def timer(func: Callable[..., Return]) -> Callable[..., Return]:
     """Print the runtime of the decorated function."""
 
     @functools.wraps(func)
-    def wrapper(*args: object, **kwargs: object) -> Callable:
+    def wrapper(*args: object, **kwargs: object) -> Return:
         start_time = time.perf_counter()
         value = func(*args, **kwargs)
         end_time = time.perf_counter()
