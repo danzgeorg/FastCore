@@ -39,7 +39,7 @@ for row in gen:
 # Task 4: Compare list comprehension and generator
 print("\nTask 4:")
 with Path(path).open() as f:
-    line_list = [line for line in f]
+    line_list = list(f)
     print(f"List comprehension: {line_list}")
 
 with Path(path).open() as f:
