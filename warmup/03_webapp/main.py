@@ -34,7 +34,6 @@ def register_user(
     email: Annotated[str, Form()], password: Annotated[str, Form()], city: Annotated[str, Form()]
 ) -> dict:
     """Register a new user."""
-
     email = email.lower()
 
     if not email or not password:
