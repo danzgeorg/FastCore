@@ -1,30 +1,48 @@
+"""
+Static HTML registration form with FastAPI POST endpoint.
+
+Passwords are hashed and a random salt before saving to file. The password is never returned in the response. Duplicate
+emails are rejected with 409 and message. No validation is done yet.
+"""
+
+
+import hashlib
+import json
+from pathlib import Path
+import secrets
+from typing import Annotated
+
 from fastapi import FastAPI
 from fastapi import Form
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
-import json
-import os
-import secrets
-import hashlib
 
+# create FastAPI app
 app = FastAPI()
 
 website = "static/register.html"
+users_file = Path("users.json")
 
 @app.get("/")
 def get_website() -> FileResponse:
+    """Serve the registration form."""
     return FileResponse(website)
 
 @app.post("/register")
-def register_user(email: str = Form(...), password: str = Form(...), city: str = Form(...)):
+def register_user(
+        email: Annotated[str, Form()],
+        password: Annotated[str, Form()],
+        city: Annotated[str, Form()]) -> dict:
+    """Register a new user."""
     email = email.lower()
+
     if not email or not password:
         return {"error": "Email and password are required."}
 
     # load existing users from file
-    if os.path.exists("users.json"):
-        with open("users.json", "r") as users_file:
-            users = json.load(users_file)
+    if users_file.exists():
+        with users_file.open() as f:
+            users = json.load(f)
     else:
         users = []
 
@@ -42,8 +60,8 @@ def register_user(email: str = Form(...), password: str = Form(...), city: str =
     # save user to file
     new_user = {"email": email, "salt": salt_hex, "hash": hash_hex, "city": city}
     users.append(new_user)
-    with open("users.json", "w") as users_file:
-        json.dump(users, users_file, indent=4)
+    with users_file.open("w") as f:
+        json.dump(users, f, indent=4)
 
     return {"email": email, "city": city}
 
