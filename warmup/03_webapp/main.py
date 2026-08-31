@@ -5,7 +5,6 @@ Passwords are hashed and a random salt before saving to file. The password is ne
 emails are rejected with 409 and message. No validation is done yet.
 """
 
-
 import hashlib
 import json
 from pathlib import Path
@@ -23,17 +22,19 @@ app = FastAPI()
 website = "static/register.html"
 users_file = Path("users.json")
 
+
 @app.get("/")
 def get_website() -> FileResponse:
     """Serve the registration form."""
     return FileResponse(website)
 
+
 @app.post("/register")
 def register_user(
-        email: Annotated[str, Form()],
-        password: Annotated[str, Form()],
-        city: Annotated[str, Form()]) -> dict:
+    email: Annotated[str, Form()], password: Annotated[str, Form()], city: Annotated[str, Form()]
+) -> dict:
     """Register a new user."""
+
     email = email.lower()
 
     if not email or not password:
@@ -64,4 +65,3 @@ def register_user(
         json.dump(users, f, indent=4)
 
     return {"email": email, "city": city}
-
