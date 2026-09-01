@@ -7,7 +7,7 @@ dev = [
     "fastapi",
     "uvicorn",
     "python-multipart",
-    "email-validaor",
+    "email-validator",
 ]
 
 [tool.mypy]

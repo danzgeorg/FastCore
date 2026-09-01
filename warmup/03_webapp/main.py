@@ -37,7 +37,7 @@ def register_user(
 ) -> dict[str, str]:
     """Register a new user."""
     if not email or not password:
-        raise HTTPException (status_code=400, detail="Email and password are required.")
+        raise HTTPException(status_code=400, detail="Email and password are required.")
 
     try:
         validate_email(email)
