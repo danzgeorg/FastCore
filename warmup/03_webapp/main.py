@@ -11,6 +11,8 @@ from pathlib import Path
 import secrets
 from typing import Annotated
 
+from email_validator import EmailNotValidError
+from email_validator import validate_email
 from fastapi import FastAPI
 from fastapi import Form
 from fastapi import HTTPException
@@ -34,21 +36,27 @@ def register_user(
     email: Annotated[str, Form()], password: Annotated[str, Form()], city: Annotated[str, Form()]
 ) -> dict:
     """Register a new user."""
-    email = email.lower()
-
     if not email or not password:
-        return {"error": "Email and password are required."}
+        raise HTTPException (status_code=400, detail = "Email and password are required.")
+
+    try:
+        validate_email(email)
+    except EmailNotValidError:
+        raise HTTPException(status_code=400, detail="Invalid email address.") from None
 
     # load existing users from file
     if users_file.exists():
-        with users_file.open() as f:
-            users = json.load(f)
+        try:
+            with users_file.open() as f:
+                users = json.load(f)
+        except json.JSONDecodeError:
+            users = []
     else:
         users = []
 
     # check if email already exists
     for user in users:
-        if user["email"] == email:
+        if user["email"].lower() == email.lower():
             raise HTTPException(status_code=409, detail="Email already registered.")
 
     # hash the password
