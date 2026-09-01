@@ -34,10 +34,10 @@ def get_website() -> FileResponse:
 @app.post("/register")
 def register_user(
     email: Annotated[str, Form()], password: Annotated[str, Form()], city: Annotated[str, Form()]
-) -> dict:
+) -> dict[str, str]:
     """Register a new user."""
     if not email or not password:
-        raise HTTPException (status_code=400, detail = "Email and password are required.")
+        raise HTTPException (status_code=400, detail="Email and password are required.")
 
     try:
         validate_email(email)
