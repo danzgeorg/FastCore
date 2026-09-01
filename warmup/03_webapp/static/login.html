@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<input id = "email" type="email" placeholder="email" />
+<input id = "password" type="password" placeholder="password">
+<button onclick="doLogin()">Login</button>
+<div id="result"></div>
+
+<script>
+
+    async function doLogin() {
+        // read what the user typed.
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+
+        // send the request ourselves
+        const response = await fetch("/login", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({email: email, password: password})
+        });
+
+        // the answer is here and the page has not moved.
+        const data = await response.json();
+        const box = document.getElementById("result");
+
+        if (response.status === 200) {
+            box.textContent = "Welcome" + data.email;
+        } else {
+            box.textContent = data.detail;
+        }
+    }
+</script>
+
+</html>

@@ -11,6 +11,8 @@ from pathlib import Path
 import secrets
 from typing import Annotated
 
+from pydantic import BaseModel
+from pydantic import EmailStr
 from email_validator import EmailNotValidError
 from email_validator import validate_email
 from fastapi import FastAPI
@@ -21,14 +23,26 @@ from fastapi.responses import FileResponse
 # create FastAPI app
 app = FastAPI()
 
-website = "static/register.html"
+class LoginRequest(BaseModel):
+    """Shape of the JSON request body."""
+    email: EmailStr
+    password: str
+
+register = "static/register.html"
+login = "static/login.html"
 users_file = Path("users.json")
 
 
 @app.get("/")
 def get_website() -> FileResponse:
     """Serve the registration form."""
-    return FileResponse(website)
+    return FileResponse(register)
+
+
+@app.get("/login")
+def login_user() -> FileResponse:
+    """Serve the login form."""
+    return FileResponse(login)
 
 
 @app.post("/register")
