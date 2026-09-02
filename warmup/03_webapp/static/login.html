@@ -25,7 +25,7 @@
         const box = document.getElementById("result");
 
         if (response.status === 200) {
-            box.textContent = "Welcome" + data.email;
+            box.textContent = "Welcome " + data.email;
         } else {
             box.textContent = data.detail;
         }

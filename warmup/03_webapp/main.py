@@ -6,6 +6,7 @@ emails are rejected with 409 and message. No validation is done yet.
 """
 
 import hashlib
+import hmac
 import json
 from pathlib import Path
 import secrets
@@ -32,15 +33,25 @@ register = "static/register.html"
 login = "static/login.html"
 users_file = Path("users.json")
 
+def load_users() -> list[dict[str, str]]:
+    """Load the users JSON file and return it treating a missing or corrupt file as empty."""
+    if users_file.exists():
+        try:
+            with users_file.open() as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return []
+    return []
+
 
 @app.get("/")
-def get_website() -> FileResponse:
+def get_register() -> FileResponse:
     """Serve the registration form."""
     return FileResponse(register)
 
 
 @app.get("/login")
-def login_user() -> FileResponse:
+def get_login() -> FileResponse:
     """Serve the login form."""
     return FileResponse(login)
 
@@ -86,3 +97,18 @@ def register_user(
         json.dump(users, f, indent=4)
 
     return {"email": email, "city": city}
+
+@app.post("/login")
+def login_user(payload: LoginRequest) -> dict[str, str]:
+    """Log user in."""
+    users = load_users()
+
+    for user in users:
+        if user["email"].lower() == payload.email.lower():
+            salt = bytes.fromhex(user["salt"])
+            expected_hash = bytes.fromhex(user["hash"])
+            given_hash = hashlib.pbkdf2_hmac("sha256", payload.password.encode(), salt, 100_000)
+
+            if hmac.compare_digest(given_hash, expected_hash):
+                return {"email": user["email"], "city": user["city"]}
+    raise HTTPException(status_code=401, detail="Incorrect email or password.")
