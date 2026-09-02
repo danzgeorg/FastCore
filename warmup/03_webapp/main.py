@@ -12,26 +12,30 @@ from pathlib import Path
 import secrets
 from typing import Annotated
 
-from pydantic import BaseModel
-from pydantic import EmailStr
 from email_validator import EmailNotValidError
 from email_validator import validate_email
 from fastapi import FastAPI
 from fastapi import Form
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from pydantic import EmailStr
 
 # create FastAPI app
 app = FastAPI()
 
+
 class LoginRequest(BaseModel):
     """Shape of the JSON request body."""
+
     email: EmailStr
     password: str
+
 
 register = "static/register.html"
 login = "static/login.html"
 users_file = Path("users.json")
+
 
 def load_users() -> list[dict[str, str]]:
     """Load the users JSON file and return it treating a missing or corrupt file as empty."""
@@ -97,6 +101,7 @@ def register_user(
         json.dump(users, f, indent=4)
 
     return {"email": email, "city": city}
+
 
 @app.post("/login")
 def login_user(payload: LoginRequest) -> dict[str, str]:
