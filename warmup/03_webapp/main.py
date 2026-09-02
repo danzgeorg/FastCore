@@ -46,7 +46,7 @@ def load_users() -> list[dict[str, str]]:
                 data = json.load(f)
         except json.JSONDecodeError:
             return []
-        return cast(list[dict[str, str]], data)
+        return cast("list[dict[str, str]]", data)
     return []
 
 
