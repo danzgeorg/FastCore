@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 import secrets
 from typing import Annotated
+from typing import cast
 
 from email_validator import EmailNotValidError
 from email_validator import validate_email
@@ -42,9 +43,10 @@ def load_users() -> list[dict[str, str]]:
     if users_file.exists():
         try:
             with users_file.open() as f:
-                return json.load(f)
+                data = json.load(f)
         except json.JSONDecodeError:
             return []
+        return cast(list[dict[str, str]], data)
     return []
 
 

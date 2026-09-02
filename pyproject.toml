@@ -13,6 +13,7 @@ dev = [
 [tool.mypy]
 python_version = "3.14"
 strict = true
+# Should I add plugins = ["pydantic.mypy"] to resolve the mypy issue?
 # Strictness beyond --strict: forbid Any in any form and flag dead code.
 warn_unreachable = true
 disallow_any_explicit = true
