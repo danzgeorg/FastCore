@@ -6,10 +6,12 @@ emails are rejected with 409 and message. No validation is done yet.
 """
 
 import hashlib
+import hmac
 import json
 from pathlib import Path
 import secrets
 from typing import Annotated
+from typing import cast
 
 from email_validator import EmailNotValidError
 from email_validator import validate_email
@@ -17,18 +19,47 @@ from fastapi import FastAPI
 from fastapi import Form
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from pydantic import EmailStr
 
 # create FastAPI app
 app = FastAPI()
 
-website = "static/register.html"
+
+class LoginRequest(BaseModel):  # type: ignore[explicit-any]
+    """Shape of the JSON request body."""
+
+    email: EmailStr
+    password: str
+
+
+register = "static/register.html"
+login = "static/login.html"
 users_file = Path("users.json")
 
 
+def load_users() -> list[dict[str, str]]:
+    """Load the users JSON file and return it treating a missing or corrupt file as empty."""
+    if users_file.exists():
+        try:
+            with users_file.open() as f:
+                data = json.load(f)
+        except json.JSONDecodeError:
+            return []
+        return cast("list[dict[str, str]]", data)
+    return []
+
+
 @app.get("/")
-def get_website() -> FileResponse:
+def get_register() -> FileResponse:
     """Serve the registration form."""
-    return FileResponse(website)
+    return FileResponse(register)
+
+
+@app.get("/login")
+def get_login() -> FileResponse:
+    """Serve the login form."""
+    return FileResponse(login)
 
 
 @app.post("/register")
@@ -72,3 +103,19 @@ def register_user(
         json.dump(users, f, indent=4)
 
     return {"email": email, "city": city}
+
+
+@app.post("/login")
+def login_user(payload: LoginRequest) -> dict[str, str]:
+    """Log user in."""
+    users = load_users()
+
+    for user in users:
+        if user["email"].lower() == payload.email.lower():
+            salt = bytes.fromhex(user["salt"])
+            expected_hash = bytes.fromhex(user["hash"])
+            given_hash = hashlib.pbkdf2_hmac("sha256", payload.password.encode(), salt, 100_000)
+
+            if hmac.compare_digest(given_hash, expected_hash):
+                return {"email": user["email"], "city": user["city"]}
+    raise HTTPException(status_code=401, detail="Incorrect email or password.")
