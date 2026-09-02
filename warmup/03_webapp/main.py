@@ -26,7 +26,7 @@ from pydantic import EmailStr
 app = FastAPI()
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(BaseModel):  # type: ignore[explicit-any]
     """Shape of the JSON request body."""
 
     email: EmailStr
