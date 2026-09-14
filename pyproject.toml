@@ -10,6 +10,10 @@ dev = [
     "email-validator==2.3.0",
 ]
 
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+
 [tool.mypy]
 python_version = "3.14"
 strict = true
