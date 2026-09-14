@@ -1,72 +1,57 @@
 """
-Static HTML registration form with FastAPI POST endpoint.
+FastAPI Webapp: registration and login, and full user CRUD.
 
-Passwords are hashed and a random salt before saving to file. The password is never returned in the response. Duplicate
-emails are rejected with 409 and message. No validation is done yet.
+Passwords are hashed and salted before saving to file. The password, salt and hash are not returned in any response.
+
+This file Contains no file I/O.
 """
 
-import hashlib
 import hmac
-import json
-from pathlib import Path
-import secrets
 from typing import Annotated
-from typing import cast
 
 from fastapi import FastAPI
 from fastapi import Form
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from pydantic import EmailStr
+from models import LoginRequest
+from models import RegisterRequest
+from models import User
+from models import UserCreate
+from models import UserPublic
+from models import UserUpdate
+from storage import email_exists
+from storage import find_user_by_email
+from storage import find_user_by_id
+from storage import load_users
+from storage import save_users
 
 # create FastAPI app
 app = FastAPI()
 
-
-class RegisterRequest(BaseModel):
-    """Shape of the registration body."""
-
-    email: EmailStr
-    password: str
-    city: str
-
-
-class LoginRequest(BaseModel):
-    """Shape of the login body."""
-
-    email: EmailStr
-    password: str
-
-
-class User:
-    """Represents a registered user with a salted password hash."""
-
-    def __init__(self, email: EmailStr, city: str, password: str) -> None:
-        self.email = email
-        self.city = city
-
-        salt = secrets.token_bytes(16)
-        hashed_password = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000)
-        self.salt = salt.hex()
-        self.hash = hashed_password.hex()
-
-
 register = "static/register.html"
 login = "static/login.html"
-users_file = Path("users.json")
 
 
-def load_users() -> list[dict[str, str]]:
-    """Load the users JSON file and return it treating a missing or corrupt file as empty."""
-    if users_file.exists():
-        try:
-            with users_file.open() as f:
-                data = json.load(f)
-        except json.JSONDecodeError:
-            return []
-        return cast("list[dict[str, str]]", data)
-    return []
+def create_new_user(email: str, password: str, city: str) -> User:
+    """Create a new user. Raise 409 if email is taken."""
+    users = load_users()
+
+    if email_exists(users, email):
+        raise HTTPException(status_code=409, detail="Email already registered.")
+
+    new_user = User(email=email, city=city, password=password)
+    users.append(new_user.__dict__)
+    save_users(users)
+
+    return new_user
+
+
+def get_user_or_404(user_id: str, users: list[dict[str, str]]) -> dict[str, str]:
+    """Get a user by id, or raise 404 if not found."""
+    user = find_user_by_id(users, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail=f"User not found with id {user_id}.")
+    return user
 
 
 @app.get("/")
@@ -86,32 +71,71 @@ def register_user(
     payload: Annotated[RegisterRequest, Form()],
 ) -> dict[str, str]:
     """Register a new user."""
-    users = load_users()
-
-    for user in users:
-        if user["email"].lower() == payload.email.lower():
-            raise HTTPException(status_code=409, detail="Email already registered.")
-
-    new_user = User(email=payload.email, city=payload.city, password=payload.password)
-    users.append(new_user.__dict__)
-
-    with users_file.open("w") as f:
-        json.dump(users, f, indent=4)
-
-    return {"email": payload.email, "city": payload.city}
+    new_user = create_new_user(payload.email, payload.password, payload.city)
+    return {"email": new_user.email, "city": new_user.city}
 
 
 @app.post("/login")
 def login_user(payload: LoginRequest) -> dict[str, str]:
     """Log user in."""
     users = load_users()
+    user = find_user_by_email(users, payload.email)
 
-    for user in users:
-        if user["email"].lower() == payload.email.lower():
-            salt = bytes.fromhex(user["salt"])
-            expected_hash = bytes.fromhex(user["hash"])
-            given_hash = hashlib.pbkdf2_hmac("sha256", payload.password.encode(), salt, 100_000)
+    if user is not None:
+        salt = bytes.fromhex(user["salt"])
+        expected_hash = bytes.fromhex(user["hash"])
+        actual_hash = User.hash_password(payload.password, salt)
 
-            if hmac.compare_digest(given_hash, expected_hash):
-                return {"email": user["email"], "city": user["city"]}
-    raise HTTPException(status_code=401, detail="Incorrect email or password.")
+        if hmac.compare_digest(expected_hash, actual_hash):
+            return {"email": payload.email, "city": user["city"]}
+
+    raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+
+@app.post("/users", response_model=UserPublic)
+def create_user(payload: UserCreate) -> UserPublic:
+    """Create a new user with JSON."""
+    new_user = create_new_user(payload.email, payload.password, payload.city)
+    return UserPublic(**new_user.__dict__)
+
+
+@app.get("/users", response_model=list[UserPublic])
+def get_users() -> list[UserPublic]:
+    """Get all users."""
+    users = load_users()
+    return [UserPublic(**user) for user in users]
+
+
+@app.get("/users/{user_id}", response_model=UserPublic)
+def get_user(user_id: str) -> UserPublic:
+    """Get a single user."""
+    users = load_users()
+    user = get_user_or_404(user_id, users)
+    return UserPublic(**user)
+
+
+@app.put("/users/{user_id}", response_model=UserPublic)
+def update_user(user_id: str, payload: UserUpdate) -> UserPublic:
+    """Update a single user's city and/or password. Unknown id gives 404."""
+    users = load_users()
+    user = get_user_or_404(user_id, users)
+
+    if payload.city is not None:
+        user["city"] = payload.city
+    if payload.password is not None:
+        updated = User(email=user["email"], city=user["city"], password=payload.password)
+        user["salt"] = updated.salt
+        user["hash"] = updated.hash
+
+    save_users(users)
+    return UserPublic(**user)
+
+
+@app.delete("/users/{user_id}", status_code=204)
+def delete_user(user_id: str) -> None:
+    """Delete a single user using their id. Returns 204. Unknown id gives 404."""
+    users = load_users()
+    user = get_user_or_404(user_id, users)
+
+    users.remove(user)
+    save_users(users)
