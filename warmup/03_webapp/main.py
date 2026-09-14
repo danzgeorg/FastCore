@@ -23,6 +23,7 @@ from pydantic import EmailStr
 # create FastAPI app
 app = FastAPI()
 
+
 class RegisterRequest(BaseModel):
     """Shape of the registration body."""
 
@@ -30,11 +31,13 @@ class RegisterRequest(BaseModel):
     password: str
     city: str
 
+
 class LoginRequest(BaseModel):
     """Shape of the login body."""
 
     email: EmailStr
     password: str
+
 
 class User:
     """Represents a registered user with a salted password hash."""
@@ -48,9 +51,11 @@ class User:
         self.salt = salt.hex()
         self.hash = hashed_password.hex()
 
+
 register = "static/register.html"
 login = "static/login.html"
 users_file = Path("users.json")
+
 
 def load_users() -> list[dict[str, str]]:
     """Load the users JSON file and return it treating a missing or corrupt file as empty."""
