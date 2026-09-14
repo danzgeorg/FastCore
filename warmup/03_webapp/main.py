@@ -123,10 +123,7 @@ def update_user(user_id: str, payload: UserUpdate) -> UserPublic:
     if payload.city is not None:
         user["city"] = payload.city
     if payload.password is not None:
-        updated = User(email=user["email"],
-                       city=user["city"],
-                       password=payload.password
-                       )
+        updated = User(email=user["email"], city=user["city"], password=payload.password)
         user["salt"] = updated.salt
         user["hash"] = updated.hash
 
