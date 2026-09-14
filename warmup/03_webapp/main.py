@@ -7,11 +7,14 @@ This file Contains no file I/O.
 """
 
 import hmac
+import logging
+import time
 from typing import Annotated
 
 from fastapi import FastAPI
 from fastapi import Form
 from fastapi import HTTPException
+from fastapi import Request
 from fastapi.responses import FileResponse
 from models import LoginRequest
 from models import RegisterRequest
@@ -31,6 +34,8 @@ app = FastAPI()
 register = "static/register.html"
 login = "static/login.html"
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def create_new_user(email: str, password: str, city: str) -> User:
     """Create a new user. Raise 409 if email is taken."""
@@ -53,6 +58,21 @@ def get_user_or_404(user_id: str, users: list[dict[str, str]]) -> dict[str, str]
         raise HTTPException(status_code=404, detail=f"User not found with id {user_id}.")
     return user
 
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+
+    logger.info(
+        "%s %s %s %.2fms",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+    )
+    return response
 
 @app.get("/")
 def get_register() -> FileResponse:
