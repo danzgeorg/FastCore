@@ -72,3 +72,11 @@ max-complexity = 10
     "INP001",  # implicit namespace package
     "PLW0603", # global statement
 ]
+# Test files: assert is used in pytest and HTTP status codes are self-explanatory without named constraints
+#"warmup/03_webapp/tests/**"=[
+#    "S101", #assert
+#    "S106", #hardcoded password in function call
+#    "S107", # hardcoded password as default argument
+#    "PLR2004", # magic value comparison
+#]
+# Can I add this to make sure mypy doesn't flag assert with pytest?

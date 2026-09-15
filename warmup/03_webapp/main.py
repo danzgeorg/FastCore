@@ -126,7 +126,7 @@ def login_user(
     raise HTTPException(status_code=401, detail="Invalid email or password.")
 
 
-@app.post("/users", response_model=UserPublic)
+@app.post("/users", response_model=UserPublic, status_code=201)
 def create_user(
         payload: UserCreate,
         storage: Annotated[UserStorage, Depends(get_storage)]
