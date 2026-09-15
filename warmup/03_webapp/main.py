@@ -9,8 +9,10 @@ This file Contains no file I/O.
 import hmac
 import logging
 import time
+from typing import TYPE_CHECKING
 from typing import Annotated
 
+from fastapi import Depends
 from fastapi import FastAPI
 from fastapi import Form
 from fastapi import HTTPException
@@ -22,11 +24,17 @@ from models import User
 from models import UserCreate
 from models import UserPublic
 from models import UserUpdate
-from storage import email_exists
-from storage import find_user_by_email
-from storage import find_user_by_id
-from storage import load_users
-from storage import save_users
+from storage import UserStorage
+from storage import get_storage
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
+    from collections.abc import Callable
+
+    from starlette.responses import Response
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # create FastAPI app
 app = FastAPI()
@@ -34,33 +42,12 @@ app = FastAPI()
 register = "static/register.html"
 login = "static/login.html"
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-def create_new_user(email: str, password: str, city: str) -> User:
-    """Create a new user. Raise 409 if email is taken."""
-    users = load_users()
-
-    if email_exists(users, email):
-        raise HTTPException(status_code=409, detail="Email already registered.")
-
-    new_user = User(email=email, city=city, password=password)
-    users.append(new_user.__dict__)
-    save_users(users)
-
-    return new_user
-
-
-def get_user_or_404(user_id: str, users: list[dict[str, str]]) -> dict[str, str]:
-    """Get a user by id, or raise 404 if not found."""
-    user = find_user_by_id(users, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail=f"User not found with id {user_id}.")
-    return user
-
 
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
+async def log_requests(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    """Log all requests."""
     start = time.perf_counter()
     response = await call_next(request)
     duration_ms = (time.perf_counter() - start) * 1000
@@ -73,6 +60,29 @@ async def log_requests(request: Request, call_next):
         duration_ms,
     )
     return response
+
+
+def create_new_user(email: str, password: str, city: str, storage: UserStorage) -> User:
+    """Create a new user. Raise 409 if email is taken."""
+    users = storage.load_users()
+
+    if storage.email_exists(users, email):
+        raise HTTPException(status_code=409, detail="Email already registered.")
+
+    new_user = User(email=email, city=city, password=password)
+    users.append(new_user.__dict__)
+    storage.save_users(users)
+
+    return new_user
+
+
+def get_user_or_404(user_id: str, users: list[dict[str, str]], storage: UserStorage) -> dict[str, str]:
+    """Get a user by id, or raise 404 if not found."""
+    user = storage.find_user_by_id(users, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail=f"User not found with id {user_id}.")
+    return user
+
 
 @app.get("/")
 def get_register() -> FileResponse:
@@ -89,17 +99,21 @@ def get_login() -> FileResponse:
 @app.post("/register")
 def register_user(
     payload: Annotated[RegisterRequest, Form()],
+    storage: Annotated[UserStorage, Depends(get_storage)]
 ) -> dict[str, str]:
     """Register a new user."""
-    new_user = create_new_user(payload.email, payload.password, payload.city)
+    new_user = create_new_user(payload.email, payload.password, payload.city, storage)
     return {"email": new_user.email, "city": new_user.city}
 
 
 @app.post("/login")
-def login_user(payload: LoginRequest) -> dict[str, str]:
+def login_user(
+        payload: LoginRequest,
+        storage: Annotated[UserStorage, Depends(get_storage)]
+) -> dict[str, str]:
     """Log user in."""
-    users = load_users()
-    user = find_user_by_email(users, payload.email)
+    users = storage.load_users()
+    user = storage.find_user_by_email(users, payload.email)
 
     if user is not None:
         salt = bytes.fromhex(user["salt"])
@@ -113,32 +127,39 @@ def login_user(payload: LoginRequest) -> dict[str, str]:
 
 
 @app.post("/users", response_model=UserPublic)
-def create_user(payload: UserCreate) -> UserPublic:
+def create_user(
+        payload: UserCreate,
+        storage: Annotated[UserStorage, Depends(get_storage)]
+) -> UserPublic:
     """Create a new user with JSON."""
-    new_user = create_new_user(payload.email, payload.password, payload.city)
+    new_user = create_new_user(payload.email, payload.password, payload.city, storage)
     return UserPublic(**new_user.__dict__)
 
 
 @app.get("/users", response_model=list[UserPublic])
-def get_users() -> list[UserPublic]:
+def get_users(storage: Annotated[UserStorage, Depends(get_storage)]) -> list[UserPublic]:
     """Get all users."""
-    users = load_users()
+    users = storage.load_users()
     return [UserPublic(**user) for user in users]
 
 
 @app.get("/users/{user_id}", response_model=UserPublic)
-def get_user(user_id: str) -> UserPublic:
+def get_user(user_id: str, storage: Annotated[UserStorage, Depends(get_storage)]) -> UserPublic:
     """Get a single user."""
-    users = load_users()
-    user = get_user_or_404(user_id, users)
+    users = storage.load_users()
+    user = get_user_or_404(user_id, users, storage)
     return UserPublic(**user)
 
 
 @app.put("/users/{user_id}", response_model=UserPublic)
-def update_user(user_id: str, payload: UserUpdate) -> UserPublic:
+def update_user(
+        user_id: str,
+        payload: UserUpdate,
+        storage: Annotated[UserStorage, Depends(get_storage)]
+) -> UserPublic:
     """Update a single user's city and/or password. Unknown id gives 404."""
-    users = load_users()
-    user = get_user_or_404(user_id, users)
+    users = storage.load_users()
+    user = get_user_or_404(user_id, users, storage)
 
     if payload.city is not None:
         user["city"] = payload.city
@@ -147,15 +168,15 @@ def update_user(user_id: str, payload: UserUpdate) -> UserPublic:
         user["salt"] = updated.salt
         user["hash"] = updated.hash
 
-    save_users(users)
+    storage.save_users(users)
     return UserPublic(**user)
 
 
 @app.delete("/users/{user_id}", status_code=204)
-def delete_user(user_id: str) -> None:
+def delete_user(user_id: str, storage: Annotated[UserStorage, Depends(get_storage)]) -> None:
     """Delete a single user using their id. Returns 204. Unknown id gives 404."""
-    users = load_users()
-    user = get_user_or_404(user_id, users)
+    users = storage.load_users()
+    user = get_user_or_404(user_id, users, storage)
 
     users.remove(user)
-    save_users(users)
+    storage.save_users(users)
