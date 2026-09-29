@@ -44,9 +44,7 @@ login = "static/login.html"
 
 
 @app.middleware("http")
-async def log_requests(
-        request: Request,
-        call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+async def log_requests(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
     """Log all requests."""
     start = time.perf_counter()
     response = await call_next(request)
@@ -98,8 +96,7 @@ def get_login() -> FileResponse:
 
 @app.post("/register")
 def register_user(
-    payload: Annotated[RegisterRequest, Form()],
-    storage: Annotated[UserStorage, Depends(get_storage)]
+    payload: Annotated[RegisterRequest, Form()], storage: Annotated[UserStorage, Depends(get_storage)]
 ) -> dict[str, str]:
     """Register a new user."""
     new_user = create_new_user(payload.email, payload.password, payload.city, storage)
@@ -107,10 +104,7 @@ def register_user(
 
 
 @app.post("/login")
-def login_user(
-        payload: LoginRequest,
-        storage: Annotated[UserStorage, Depends(get_storage)]
-) -> dict[str, str]:
+def login_user(payload: LoginRequest, storage: Annotated[UserStorage, Depends(get_storage)]) -> dict[str, str]:
     """Log user in."""
     users = storage.load_users()
     user = storage.find_user_by_email(users, payload.email)
@@ -127,10 +121,7 @@ def login_user(
 
 
 @app.post("/users", response_model=UserPublic, status_code=201)
-def create_user(
-        payload: UserCreate,
-        storage: Annotated[UserStorage, Depends(get_storage)]
-) -> UserPublic:
+def create_user(payload: UserCreate, storage: Annotated[UserStorage, Depends(get_storage)]) -> UserPublic:
     """Create a new user with JSON."""
     new_user = create_new_user(payload.email, payload.password, payload.city, storage)
     return UserPublic(**new_user.__dict__)
@@ -152,11 +143,7 @@ def get_user(user_id: str, storage: Annotated[UserStorage, Depends(get_storage)]
 
 
 @app.put("/users/{user_id}", response_model=UserPublic)
-def update_user(
-        user_id: str,
-        payload: UserUpdate,
-        storage: Annotated[UserStorage, Depends(get_storage)]
-) -> UserPublic:
+def update_user(user_id: str, payload: UserUpdate, storage: Annotated[UserStorage, Depends(get_storage)]) -> UserPublic:
     """Update a single user's city and/or password. Unknown id gives 404."""
     users = storage.load_users()
     user = get_user_or_404(user_id, users, storage)
