@@ -99,7 +99,12 @@ def register_user(
     payload: Annotated[RegisterRequest, Form()], storage: Annotated[UserStorage, Depends(get_storage)]
 ) -> dict[str, str]:
     """Register a new user."""
-    new_user = create_new_user(payload.email, payload.password, payload.city, storage)
+    try:
+        new_user = create_new_user(payload.email, payload.password, payload.city, storage)
+        logger.info("User %s was registered successfully.", payload.email)
+    except HTTPException as exc:
+        logger.info("Could not register user %s: %s", payload.email, exc.detail)
+        raise
     return {"email": new_user.email, "city": new_user.city}
 
 
@@ -115,15 +120,23 @@ def login_user(payload: LoginRequest, storage: Annotated[UserStorage, Depends(ge
         actual_hash = User.hash_password(payload.password, salt)
 
         if hmac.compare_digest(expected_hash, actual_hash):
+            logger.info("User %s was logged successfully.", payload.email)
             return {"email": payload.email, "city": user["city"]}
 
+    #Vague logging prevents a potential hacker from using the response
+    logger.warning("Failed to login user: %s", payload.email)
     raise HTTPException(status_code=401, detail="Invalid email or password.")
 
 
 @app.post("/users", response_model=UserPublic, status_code=201)
 def create_user(payload: UserCreate, storage: Annotated[UserStorage, Depends(get_storage)]) -> UserPublic:
     """Create a new user with JSON."""
-    new_user = create_new_user(payload.email, payload.password, payload.city, storage)
+    try:
+        new_user = create_new_user(payload.email, payload.password, payload.city, storage)
+        logger.info("User %s was created successfully.", payload.email)
+    except HTTPException as exc:
+        logger.info("Could not create user %s: %s", payload.email, exc.detail)
+        raise
     return UserPublic(**new_user.__dict__)
 
 
@@ -156,6 +169,7 @@ def update_user(user_id: str, payload: UserUpdate, storage: Annotated[UserStorag
         user["hash"] = updated.hash
 
     storage.save_users(users)
+    logger.info("Updated user %s.", user["email"])
     return UserPublic(**user)
 
 
@@ -167,3 +181,4 @@ def delete_user(user_id: str, storage: Annotated[UserStorage, Depends(get_storag
 
     users.remove(user)
     storage.save_users(users)
+    logger.info("Deleted user %s.", user["email"])
