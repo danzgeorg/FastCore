@@ -1,0 +1,16 @@
+{
+  "valid_emails": [
+    "ana@example.com",
+    "ben@example.com",
+    "cat@example.com"
+  ],
+  "invalid_emails": [
+    "A-example.com",
+    "ana@sample",
+    "not-an-email"
+  ],
+  "passwords": [
+    "correct-password",
+    "another-valid-pw1"
+  ]
+}

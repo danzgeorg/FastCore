@@ -1,5 +1,7 @@
 """Tests for user CRUD, using a temporary UserStorage instead of the real users.json."""
 
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
 
@@ -11,9 +13,10 @@ from storage import get_storage
 
 if TYPE_CHECKING:
     from collections.abc import Generator
-    from pathlib import Path
 
     import httpx
+
+FIXTURES = json.loads((Path(__file__).parent / "fixtures.json").read_text())
 
 
 @pytest.fixture
@@ -51,6 +54,24 @@ def test_create_user(client: TestClient) -> None:
     assert_no_secrets(body)
 
 
+@pytest.mark.parametrize("email", FIXTURES["valid_emails"])
+def test_create_user_valid_email(client: TestClient, email: str) -> None:
+    """POST /users accepts well-formed email and returns 201."""
+    response = create_test_user(client, email=email, password="correct-password")
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["email"] == email
+
+
+@pytest.mark.parametrize("email", FIXTURES["invalid_emails"])
+def test_create_user_invalid_email(client: TestClient, email: str) -> None:
+    """POST /users rejects invalid emails with 422."""
+    response = create_test_user(client, email=email, password="correct-password")
+
+    assert response.status_code == 422
+
+
 def test_get_invalid_id(client: TestClient) -> None:
     """GET /users{user_id} should return a 404 status code if using an invalid id."""
     response = client.get("/users/does-not-exist")
@@ -58,11 +79,12 @@ def test_get_invalid_id(client: TestClient) -> None:
     assert response.status_code == 404
 
 
-def test_login_with_wrong_password(client: TestClient) -> None:
+@pytest.mark.parametrize("password", FIXTURES["passwords"])
+def test_login_with_wrong_password(client: TestClient, password: str) -> None:
     """Login with the wrong password should return a 401 status code."""
-    create_test_user(client, password="correct-password")
+    create_test_user(client, email="ana@example.com", password="the-real-password")
 
-    response = client.post("/login", json={"email": "ana@example.com", "password": "wrong-password"})
+    response = client.post("/login", json={"email": "ana@example.com", "password": password})
 
     assert response.status_code == 401
 
