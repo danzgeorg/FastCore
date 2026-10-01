@@ -171,3 +171,13 @@ def test_update_user_password(client: TestClient) -> None:
 
     assert old_login.status_code == 401
     assert new_login.status_code == 200
+
+
+def test_invalid_json(tmp_path: Path) -> None:
+    """UserStorage.load_users() treats a file that isn't valid JSON as empty."""
+    invalid_file = tmp_path / "corrupt_users.json"
+    invalid_file.write_text("this is not valid json {{{")
+
+    storage = UserStorage(invalid_file)
+
+    assert storage.load_users() == []
