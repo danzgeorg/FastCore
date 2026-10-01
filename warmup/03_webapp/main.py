@@ -123,7 +123,7 @@ def login_user(payload: LoginRequest, storage: Annotated[UserStorage, Depends(ge
             logger.info("User %s was logged successfully.", payload.email)
             return {"email": payload.email, "city": user["city"]}
 
-    #Vague logging prevents a potential hacker from using the response
+    # Vague logging prevents a potential hacker from using the response
     logger.warning("Failed to login user: %s", payload.email)
     raise HTTPException(status_code=401, detail="Invalid email or password.")
 
