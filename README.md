@@ -74,23 +74,26 @@ warmup/
     models.py           Pydantic models and password hashing
     storage.py          UserStorage: all reading and writing of users.json
     static/             Registration and login HTML forms
-    conftest.py         Shared pytest fixtures
     tests/              pytest suite and fixtures
 ```
 
 ## Roadmap
 
-Nothing below is built yet. The tickets are in the GitHub issue backlog, in order. The first is in progress, the rest make up the main project: an auction house app that grows out of this API.
+Nothing below is built yet. The tickets are in the GitHub issue backlog, in order. The main project is an auction house app that grows out of this API.
 
-**Warm-up**
+**Next up**
 
-- [ ] Upload a CSV or Excel file and summarise it with pandas ([#8](https://github.com/danzgeorg/FastCore/issues/8))
-
-**Auction house app: FastAPI**
-
+- [ ] Upload a CSV or Excel file and summarise it with pandas ([#8](https://github.com/danzgeorg/FastCore/issues/8)), in progress
 - [ ] Split the app into routers ([#15](https://github.com/danzgeorg/FastCore/issues/15))
 - [ ] Jinja2 pages ([#16](https://github.com/danzgeorg/FastCore/issues/16))
 - [ ] JSON logging with request ids and audit events ([#17](https://github.com/danzgeorg/FastCore/issues/17))
+- [ ] Docker basics: images, containers, ports and logs ([#18](https://github.com/danzgeorg/FastCore/issues/18))
+
+<details>
+<summary>Full backlog</summary>
+
+**FastAPI**
+
 - [ ] Register, log in and log out with a session cookie. Right now login returns 200 or 401 and nothing remembers the user, and any caller can update or delete any user ([#24](https://github.com/danzgeorg/FastCore/issues/24))
 - [ ] Sell an item and browse the market ([#25](https://github.com/danzgeorg/FastCore/issues/25))
 - [ ] Roles: moderators cancel auctions, admins run the players ([#29](https://github.com/danzgeorg/FastCore/issues/29))
@@ -107,7 +110,6 @@ Nothing below is built yet. The tickets are in the GitHub issue backlog, in orde
 
 **Docker**
 
-- [ ] Docker basics: images, containers, ports and logs ([#18](https://github.com/danzgeorg/FastCore/issues/18))
 - [ ] Docker Compose for the database, with a healthcheck ([#20](https://github.com/danzgeorg/FastCore/issues/20))
 - [ ] A production Dockerfile for the app ([#30](https://github.com/danzgeorg/FastCore/issues/30))
 - [ ] The whole stack in Compose: app, database, migrations, settler ([#31](https://github.com/danzgeorg/FastCore/issues/31))
@@ -125,6 +127,8 @@ Nothing below is built yet. The tickets are in the GitHub issue backlog, in orde
 - [ ] Install, upgrade and roll back someone else's chart ([#37](https://github.com/danzgeorg/FastCore/issues/37))
 - [ ] Helm charts for MySQL and the auction app ([#38](https://github.com/danzgeorg/FastCore/issues/38))
 - [ ] Releases with Helm: new versions, a failed upgrade, rollback and `helm test` ([#39](https://github.com/danzgeorg/FastCore/issues/39))
+
+</details>
 
 ## Licence
 
