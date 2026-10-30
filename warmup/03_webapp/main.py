@@ -8,15 +8,18 @@ This file Contains no file I/O.
 
 import hmac
 import logging
+from pathlib import Path
 import time
 from typing import TYPE_CHECKING
 from typing import Annotated
 
 from fastapi import Depends
 from fastapi import FastAPI
+from fastapi import File
 from fastapi import Form
 from fastapi import HTTPException
 from fastapi import Request
+from fastapi import UploadFile
 from fastapi.responses import FileResponse
 from models import LoginRequest
 from models import RegisterRequest
@@ -41,6 +44,11 @@ app = FastAPI()
 
 register = "static/register.html"
 login = "static/login.html"
+index = "static/index.html"
+
+ALLOWED_EXTENSIONS = {".csv", ".xlsx"}
+FIVE_MB = 5 * 1024 * 1024  # 5MB
+CHUNK_SIZE = 64 * 1024  # 64KB
 
 
 @app.middleware("http")
@@ -82,6 +90,21 @@ def get_user_or_404(user_id: str, users: list[dict[str, str]], storage: UserStor
     return user
 
 
+async def read_file(file: UploadFile) -> bytes:
+    """Read a file in chunks. Raise 413 if it is over 5MB."""
+    data = bytearray()
+    total = 0
+    while True:
+        chunk = await file.read(CHUNK_SIZE)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > FIVE_MB:
+            raise HTTPException(status_code=413, detail="File too large. Max 5MB.")
+        data.extend(chunk)
+    return bytes(data)
+
+
 @app.get("/")
 def get_register() -> FileResponse:
     """Serve the registration form."""
@@ -92,6 +115,12 @@ def get_register() -> FileResponse:
 def get_login() -> FileResponse:
     """Serve the login form."""
     return FileResponse(login)
+
+
+@app.get("/upload-page")
+def get_upload_page() -> FileResponse:
+    """Serve the upload page form."""
+    return FileResponse(index)
 
 
 @app.post("/register")
@@ -138,6 +167,21 @@ def create_user(payload: UserCreate, storage: Annotated[UserStorage, Depends(get
         logger.info("Could not create user %s: %s", payload.email, exc.detail)
         raise
     return UserPublic(**new_user.__dict__)
+
+
+@app.post("/upload", status_code=201)
+async def upload_file(file: Annotated[UploadFile, File()]) -> dict[str, str | None]:
+    """Upload a file."""
+    filename = file.filename
+    allowed = ",".join(sorted(ALLOWED_EXTENSIONS))
+    if filename is None:
+        raise HTTPException(status_code=400, detail="No filename provided.")
+    extension = Path(filename).suffix.lower()
+    if extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Invalid file extension. Allowed: {allowed}")
+    content = await read_file(file)
+    logger.info("Uploaded file successfully %s", filename)
+    return {"filename": filename}
 
 
 @app.get("/users", response_model=list[UserPublic])
