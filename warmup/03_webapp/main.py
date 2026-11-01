@@ -6,12 +6,16 @@ Passwords are hashed and salted before saving to file. The password, salt and ha
 This file Contains no file I/O.
 """
 
+import csv
 import hmac
+import io
 import logging
+import math
 from pathlib import Path
 import time
 from typing import TYPE_CHECKING
 from typing import Annotated
+import zipfile
 
 from fastapi import Depends
 from fastapi import FastAPI
@@ -22,11 +26,14 @@ from fastapi import Request
 from fastapi import UploadFile
 from fastapi.responses import FileResponse
 from models import LoginRequest
+from models import NumberStats
 from models import RegisterRequest
+from models import UploadSummary
 from models import User
 from models import UserCreate
 from models import UserPublic
 from models import UserUpdate
+import pandas as pd
 from storage import UserStorage
 from storage import get_storage
 
@@ -49,6 +56,8 @@ index = "static/index.html"
 ALLOWED_EXTENSIONS = {".csv", ".xlsx"}
 FIVE_MB = 5 * 1024 * 1024  # 5MB
 CHUNK_SIZE = 64 * 1024  # 64KB
+MIN_CSV_COLUMNS = 2
+NUMBER_DTYPE_KINDS = frozenset("iufO")  # int, unsigned int, float, and text/object columns that may hold numbers
 
 
 @app.middleware("http")
@@ -103,6 +112,89 @@ async def read_file(file: UploadFile) -> bytes:
             raise HTTPException(status_code=413, detail="File too large. Max 5MB.")
         data.extend(chunk)
     return bytes(data)
+
+
+def validate_csv(content: bytes) -> None:
+    """Raise 422 unless content is UTF-8 text with 2+ columns and the same field count on every row."""
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=422, detail="CSV file is not valid UTF-8.") from exc
+
+    reader = csv.reader(io.StringIO(text))
+    header = next(reader, [])
+    if len(header) < MIN_CSV_COLUMNS:
+        raise HTTPException(status_code=422, detail="CSV needs a header row with at least 2 columns.")
+
+    for row in reader:
+        if row and len(row) != len(header):
+            raise HTTPException(
+                status_code=422, detail=f"CSV line {reader.line_num} has {len(row)} fields, expected {len(header)}."
+            )
+
+
+def parse_upload(content: bytes, extension: str) -> pd.DataFrame:
+    """Read an uploaded .csv or .xlsx into a DataFrame. Raise 422 if it cannot be read."""
+    buffer = io.BytesIO(content)
+    try:
+        if extension == ".csv":
+            validate_csv(content)
+            data = pd.read_csv(buffer)
+        else:
+            data = pd.read_excel(buffer)
+    except (
+        pd.errors.EmptyDataError,
+        pd.errors.ParserError,
+        pd.errors.OptionError,
+        zipfile.BadZipFile,
+        ValueError,
+    ) as exc:
+        raise HTTPException(status_code=422, detail=f"Could not read file: {exc}") from exc
+    return data
+
+
+def number_stats(numbers: list[float], non_empty_count: int) -> NumberStats | None:
+    """Return stats for a column that mostly holds numbers, or None if it does not or the result is not finite."""
+    if not numbers or len(numbers) < non_empty_count * 0.5:
+        return None
+
+    minimum = min(numbers)
+    maximum = max(numbers)
+    total = sum(numbers)
+    mean = total / len(numbers)
+
+    if not all(math.isfinite(value) for value in (minimum, maximum, total, mean)):
+        return None
+
+    return NumberStats(
+        min=round(minimum, 2),
+        max=round(maximum, 2),
+        sum=round(total, 2),
+        mean=round(mean, 2),
+        not_numeric=non_empty_count - len(numbers),
+    )
+
+
+def summarise(data: pd.DataFrame, filename: str) -> UploadSummary:
+    """Summarise the converted copies of the columns."""
+    stats: dict[str, NumberStats] = {}
+
+    for name, column in data.items():
+        if column.dtype.kind not in NUMBER_DTYPE_KINDS:
+            continue
+        non_empty = column.dropna()
+        converted = pd.to_numeric(non_empty, errors="coerce").replace([math.inf, -math.inf], math.nan).dropna()
+        column_stats = number_stats(converted.tolist(), len(non_empty))
+        if column_stats is not None:
+            stats[str(name)] = column_stats
+
+    return UploadSummary(
+        filename=filename,
+        rows=len(data),
+        columns=[str(name) for name in data.columns],
+        empty_count={str(name): int(count) for name, count in data.isna().sum().items()},
+        number_stats=stats,
+    )
 
 
 @app.get("/")
@@ -170,7 +262,7 @@ def create_user(payload: UserCreate, storage: Annotated[UserStorage, Depends(get
 
 
 @app.post("/upload", status_code=201)
-async def upload_file(file: Annotated[UploadFile, File()]) -> dict[str, str | None]:
+async def upload_file(file: Annotated[UploadFile, File()]) -> UploadSummary:
     """Upload a file."""
     filename = file.filename
     allowed = ",".join(sorted(ALLOWED_EXTENSIONS))
@@ -180,8 +272,9 @@ async def upload_file(file: Annotated[UploadFile, File()]) -> dict[str, str | No
     if extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Invalid file extension. Allowed: {allowed}")
     content = await read_file(file)
+    data = parse_upload(content, extension)
     logger.info("Uploaded file successfully %s", filename)
-    return {"filename": filename}
+    return summarise(data, filename)
 
 
 @app.get("/users", response_model=list[UserPublic])
