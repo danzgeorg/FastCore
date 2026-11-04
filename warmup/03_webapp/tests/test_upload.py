@@ -1,10 +1,13 @@
-"""Tests for POST /upload: extension check, 5 MB size limit, unreadable files and the summary it returns."""
+"""Tests for POST /upload: validation, parse errors, 5 MB size limit and the summary it returns."""
 
 import io
 from typing import TYPE_CHECKING
 
+from fastapi import HTTPException
 from main import CHUNK_SIZE
 from main import app
+from main import parse_upload
+from main import validate_upload
 import pandas as pd
 import pytest
 from starlette.testclient import TestClient
@@ -14,6 +17,8 @@ if TYPE_CHECKING:
 
 CSV_BYTES = b"a,b\n1,2\n3,4\n"
 MAX_SIZE = 5 * 1024 * 1024
+EXE_BYTES = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff"  # start of a Windows executable
+ZIP_HEADER_ONLY = b"PK\x03\x04 not really a spreadsheet"
 
 
 def to_xlsx(frame: pd.DataFrame) -> bytes:
@@ -105,6 +110,10 @@ def test_upload_wrong_extension_names_allowed_ones(client: TestClient) -> None:
         ("ragged.csv", b"a,b\n1,2,3,4\n5\n"),
         ("empty.csv", b""),
         ("binary.csv", bytes(range(256)) * 4),
+        ("renamed_exe.csv", EXE_BYTES),
+        ("renamed_exe.xlsx", EXE_BYTES),
+        ("zip_header_only.xlsx", ZIP_HEADER_ONLY),
+        ("latin1.csv", "a,b\ncafé,2\n".encode("latin-1")),
         ("garbage.xlsx", b"this is not an excel file"),
         ("truncated.xlsx", make_xlsx()[:100]),
         ("empty.xlsx", b""),
@@ -210,3 +219,105 @@ def test_summary_numeric_headers_become_text(client: TestClient) -> None:
     body = response.json()
     assert body["columns"] == ["2024", "2025"]
     assert body["number_stats"] == {"2024": stats(1, 2, 3, 1.5), "2025": stats(3, 4, 7, 3.5)}
+
+
+def test_validate_accepts_csv_with_more_than_two_columns() -> None:
+    """A CSV with 3 columns is fine. Only fewer than 2 is rejected."""
+    validate_upload("wide.csv", b"a,b,c\n1,2,3\n")
+
+
+def test_validate_accepts_real_xlsx() -> None:
+    """A real .xlsx passes the signature check."""
+    validate_upload("data.xlsx", make_xlsx())
+
+
+def test_validate_rejects_missing_filename() -> None:
+    """No filename gives 400."""
+    with pytest.raises(HTTPException) as error:
+        validate_upload(None, CSV_BYTES)
+    assert error.value.status_code == 400
+
+
+def test_validate_rejects_bad_extension() -> None:
+    """A disallowed extension gives 400, even if the bytes look fine."""
+    with pytest.raises(HTTPException) as error:
+        validate_upload("data.exe", CSV_BYTES)
+    assert error.value.status_code == 400
+
+
+@pytest.mark.parametrize(
+    ("filename", "content"),
+    [
+        ("data.csv", EXE_BYTES),
+        ("data.csv", "a,b\ncafé,2\n".encode("latin-1")),
+        ("data.csv", b"a\n1\n"),
+        ("data.csv", b"a,b\n1,2,3\n"),
+        ("data.csv", b"a,b,c\n1,2\n"),
+        ("data.xlsx", EXE_BYTES),
+        ("data.xlsx", b"plain text"),
+    ],
+)
+def test_validate_rejects_bad_content(filename: str, content: bytes) -> None:
+    """Wrong bytes, bad encoding, one column or a ragged row give 422."""
+    with pytest.raises(HTTPException) as error:
+        validate_upload(filename, content)
+    assert error.value.status_code == 422
+
+
+def test_validate_names_the_ragged_line() -> None:
+    """The 422 message points at the line with the wrong number of fields."""
+    with pytest.raises(HTTPException) as error:
+        validate_upload("ragged.csv", b"a,b\n1,2\n3,4,5\n")
+    assert "line 3" in error.value.detail
+
+
+def test_parse_empty_csv_says_no_data() -> None:
+    """An empty CSV is a 422 with its own message."""
+    with pytest.raises(HTTPException) as error:
+        parse_upload(b"", ".csv")
+    assert error.value.status_code == 422
+    assert "no data" in error.value.detail
+
+
+def test_parse_malformed_csv_gives_422() -> None:
+    """A later row with extra fields is a pandas ParserError, which becomes a 422."""
+    with pytest.raises(HTTPException) as error:
+        parse_upload(b"a,b\n1,2\n3,4,5\n", ".csv")
+    assert error.value.status_code == 422
+    assert "CSV parsing failed" in error.value.detail
+
+
+def test_parse_corrupt_xlsx_gives_422() -> None:
+    """A file with the zip header but a broken archive is a BadZipFile, which becomes a 422."""
+    with pytest.raises(HTTPException) as error:
+        parse_upload(ZIP_HEADER_ONLY, ".xlsx")
+    assert error.value.status_code == 422
+
+
+def test_parse_value_error_gives_422(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A ValueError from pandas is a 422 and the raw error text is not sent to the client."""
+
+    def fail(*_args: object, **_kwargs: object) -> pd.DataFrame:
+        message = "secret internal detail"
+        raise ValueError(message)
+
+    monkeypatch.setattr(pd, "read_csv", fail)
+    with pytest.raises(HTTPException) as error:
+        parse_upload(CSV_BYTES, ".csv")
+    assert error.value.status_code == 422
+    assert "secret" not in error.value.detail
+
+
+def test_parse_unexpected_error_gives_500(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    """Anything unexpected is a 500 with a fixed message, and the real error is logged."""
+
+    def crash(*_args: object, **_kwargs: object) -> pd.DataFrame:
+        message = "boom"
+        raise RuntimeError(message)
+
+    monkeypatch.setattr(pd, "read_csv", crash)
+    with pytest.raises(HTTPException) as error:
+        parse_upload(CSV_BYTES, ".csv")
+    assert error.value.status_code == 500
+    assert "boom" not in error.value.detail
+    assert "boom" in caplog.text

@@ -58,6 +58,7 @@ FIVE_MB = 5 * 1024 * 1024  # 5MB
 CHUNK_SIZE = 64 * 1024  # 64KB
 MIN_CSV_COLUMNS = 2
 NUMBER_DTYPE_KINDS = frozenset("iufO")  # int, unsigned int, float, and text/object columns that may hold numbers
+XLSX_SIGNATURE = b"PK\x03\x04"  # every .xlsx is a zip, and zips start with these bytes
 
 
 @app.middleware("http")
@@ -114,43 +115,62 @@ async def read_file(file: UploadFile) -> bytes:
     return bytes(data)
 
 
-def validate_csv(content: bytes) -> None:
-    """Raise 422 unless content is UTF-8 text with 2+ columns and the same field count on every row."""
+def validate_upload(filename: str | None, content: bytes) -> str:
+    """Check name, signature and shape of an upload. Return the extension. Raise 400 or 422 if invalid."""
+    if filename is None:
+        raise HTTPException(status_code=400, detail="File not found.")
+
+    extension = Path(filename).suffix.lower()
+    if extension not in ALLOWED_EXTENSIONS:
+        allowed = ",".join(ALLOWED_EXTENSIONS)
+        raise HTTPException(status_code=400, detail=f"Invalid file extension. Allowed extensions: {allowed}.")
+
+    if extension == ".xlsx":
+        if not content.startswith(XLSX_SIGNATURE):
+            raise HTTPException(status_code=422, detail="File is not a real .xlsx file.")
+        return extension
+
+    if b"\x00" in content:
+        raise HTTPException(status_code=422, detail="File is not a CSV.")
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise HTTPException(status_code=422, detail="CSV file is not valid UTF-8.") from exc
+        raise HTTPException(status_code=422, detail="CSV file is not valid utf-8.") from exc
 
     reader = csv.reader(io.StringIO(text))
     header = next(reader, [])
     if len(header) < MIN_CSV_COLUMNS:
         raise HTTPException(status_code=422, detail="CSV needs a header row with at least 2 columns.")
-
     for row in reader:
         if row and len(row) != len(header):
             raise HTTPException(
                 status_code=422, detail=f"CSV line {reader.line_num} has {len(row)} fields, expected {len(header)}."
             )
+    return extension
 
 
 def parse_upload(content: bytes, extension: str) -> pd.DataFrame:
-    """Read an uploaded .csv or .xlsx into a DataFrame. Raise 422 if it cannot be read."""
+    """Read an uploaded .csv or .xlsx into a DataFrame. Raise 422 for bad files and 500 for unexpected errors."""
     buffer = io.BytesIO(content)
     try:
         if extension == ".csv":
-            validate_csv(content)
-            data = pd.read_csv(buffer)
-        else:
-            data = pd.read_excel(buffer)
-    except (
-        pd.errors.EmptyDataError,
-        pd.errors.ParserError,
-        pd.errors.OptionError,
-        zipfile.BadZipFile,
-        ValueError,
-    ) as exc:
-        raise HTTPException(status_code=422, detail=f"Could not read file: {exc}") from exc
-    return data
+            return pd.read_csv(buffer, on_bad_lines="error")
+        return pd.read_excel(buffer)
+    except pd.errors.EmptyDataError as exc:
+        logger.warning("Upload failed: file is empty.")
+        raise HTTPException(status_code=422, detail="The file contains no data.") from exc
+    except pd.errors.ParserError as exc:
+        logger.warning("Upload failed: malformed CSV.")
+        raise HTTPException(status_code=422, detail="CSV parsing failed. Check for mismatched columns.") from exc
+    except zipfile.BadZipFile as exc:
+        logger.warning("Upload failed: corrupt xlsx archive.")
+        raise HTTPException(status_code=422, detail="Excel file is corrupt or not a valid .xlsx.") from exc
+    except ValueError as exc:
+        logger.warning("Upload failed: invalid values: %s", exc)
+        raise HTTPException(status_code=422, detail="File contains invalid data values.") from exc
+    except Exception as exc:
+        logger.exception("Unexpected crash while parsing upload.")
+        raise HTTPException(status_code=500, detail="Internal error while processing the file.") from exc
 
 
 def number_stats(numbers: list[float], non_empty_count: int) -> NumberStats | None:
@@ -263,17 +283,12 @@ def create_user(payload: UserCreate, storage: Annotated[UserStorage, Depends(get
 
 @app.post("/upload", status_code=201)
 async def upload_file(file: Annotated[UploadFile, File()]) -> UploadSummary:
-    """Upload a file."""
-    filename = file.filename
-    allowed = ",".join(sorted(ALLOWED_EXTENSIONS))
-    if filename is None:
-        raise HTTPException(status_code=400, detail="No filename provided.")
-    extension = Path(filename).suffix.lower()
-    if extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"Invalid file extension. Allowed: {allowed}")
+    """Upload a file and return a summary of it."""
     content = await read_file(file)
+    extension = validate_upload(file.filename, content)
     data = parse_upload(content, extension)
-    logger.info("Uploaded file successfully %s", filename)
+    filename = file.filename or ""  # validate_upload already rejected None, this just narrows the type for mypy
+    logger.info("Uploaded file: %s", filename)
     return summarise(data, filename)
 
 
