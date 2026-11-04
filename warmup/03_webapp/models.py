@@ -46,6 +46,26 @@ class UserPublic(BaseModel):
     city: str
 
 
+class NumberStats(BaseModel):
+    """Shape of the number stats object."""
+
+    min: float
+    max: float
+    sum: float
+    mean: float
+    not_numeric: int
+
+
+class UploadSummary(BaseModel):
+    """Shape of the upload summary."""
+
+    filename: str
+    rows: int
+    columns: list[str]
+    empty_count: dict[str, int]
+    number_stats: dict[str, NumberStats]
+
+
 class User:
     """Represents a registered user with a salted password hash.
 
